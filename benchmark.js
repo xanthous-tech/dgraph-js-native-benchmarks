@@ -31,6 +31,8 @@ async function stressTest(client, Mutation, batches, nodesPerBatch, predsSize) {
     preds.push(random.alphaNumeric(10));
   }
 
+  // const mutations = [];
+
   for (let batch = 0; batch < batches; batch++) {
     let nquads = '';
 
@@ -46,12 +48,15 @@ async function stressTest(client, Mutation, batches, nodesPerBatch, predsSize) {
 
     const mutation = new Mutation();
     mutation.setSetNquads(nquads);
+    // mutations.push(mutation);
     const result = await txn.mutate(mutation);
     // console.log(result.getUidsMap());
     console.log('batch', batch);
   }
 
-  await txn.commit();
+  // await Promise.all(mutations.map(m => txn.mutate(m)));
+
+  await txn.discard();
   console.log('done');
 }
 
@@ -59,8 +64,8 @@ async function nativeBenchmark() {
   const out = fs.createWriteStream('native_benchmark_results.csv');
   out.write('batches,nodesPerBatch,predsSize,timeSpent\n');
 
-  const batchesList = [10, 50, 100];
-  const nodesPerBatchList = [10, 100, 1000, 10000];
+  const batchesList = [10, 100];
+  const nodesPerBatchList = [10, 100, 1000];
   const predsSizeList = [1, 10, 100];
 
   for (let i = 0; i < batchesList.length; i++) {
@@ -87,12 +92,41 @@ async function nativeBenchmark() {
   }
 
   out.close();
-
-  // await clearTest();
-  // console.log('testing js client');
-  // console.time('test js client');
-  // await stressTest(getJsClient(), JsMutation);
-  // console.timeEnd('test js client');
 }
 
-nativeBenchmark();
+async function jsBenchmark() {
+  const out = fs.createWriteStream('js_benchmark_results.csv');
+  out.write('batches,nodesPerBatch,predsSize,timeSpent\n');
+
+  const batchesList = [100];
+  const nodesPerBatchList = [1000];
+  const predsSizeList = [1, 10, 100];
+
+  for (let i = 0; i < batchesList.length; i++) {
+    const batches = batchesList[i];
+    for (let j = 0; j < nodesPerBatchList.length; j++) {
+      const nodesPerBatch = nodesPerBatchList[j];
+      for (let k = 0; k < predsSizeList.length; k++) {
+        const predsSize = predsSizeList[k];
+
+        await clearTest();
+        console.log(
+          'testing js client with batches =', batches,
+          'nodes per batch =', nodesPerBatch,
+          'predicate count =', predsSize,
+        );
+        const timeStart = Date.now();
+        await stressTest(getJsClient(), JsMutation, batches, nodesPerBatch, predsSize);
+        const timeEnd = Date.now();
+        console.log('time spent:', timeEnd - timeStart);
+
+        out.write(`${batches},${nodesPerBatch},${predsSize},${timeEnd - timeStart}\n`);
+      }
+    }
+  }
+
+  out.close();
+}
+
+// nativeBenchmark();
+jsBenchmark();
